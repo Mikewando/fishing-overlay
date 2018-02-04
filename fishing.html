@@ -1,0 +1,109 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<title></title>
+<style>
+
+* {
+    font-family: "Segoe UI";
+    font-size: 2rem;
+    color: white;
+    text-shadow: 0px 0px 10px black;
+    text-align: right;
+}
+
+body, html {
+    margin: 0;
+}
+
+html {
+    /*
+    background-image: url(images/handle.png);
+    */
+    background-position: bottom right;
+    background-repeat: no-repeat;
+    box-sizing: border-box;
+    height: 100%;
+    background-color: transparent;
+    overflow: hidden;
+}
+
+#timer {
+    margin: 0px 10px;
+}
+</style>
+<script>
+    var intervalId;
+    var startTime;
+
+    function timerUpdate() {
+        'use strict';
+        const timerElement = document.getElementById('timer');
+        let time = (Date.now() - startTime) / 1000;
+        timerElement.textContent = time.toFixed(1);
+    }
+
+    function cleanLogMessage(message) {
+        'use strict';
+        // Cleans up the ffxiv item-metadata that I don't know how to parse
+        let encodedMessage = encodeURIComponent(message);
+        //console.log(encodedMessage);
+        let cleanedMessage = encodedMessage.replace(/%20/g, " ").replace(/%[^']{3,4}(%)/g, "$1").replace(/%../g, "");
+        //console.log(cleanedMessage);
+        return cleanedMessage;
+    }
+
+    function stopTimer() {
+        if (intervalId) {
+            window.clearInterval(intervalId);
+            intervalId = null;
+        }
+    }
+
+    function onLogLine(event) {
+        'use strict';
+        const detail = event.detail;
+        if (!detail) {
+            return;
+        }
+        const payload = detail.payload;
+        if (!payload) {
+            return;
+        }
+        if (payload.length < 3) {
+            return;
+        }
+        const message = payload[2];
+        if (/^You (re)?cast your line/.exec(message)) {
+            stopTimer();
+            document.getElementById('timer').textContent = 0.0;
+            intervalId = window.setInterval(timerUpdate, 100);
+            startTime = Date.now();
+        } else if (message.startsWith("Something bites")) {
+            stopTimer();
+        } else if (message.startsWith("The fish gets away")) {
+            stopTimer();
+        } else if (message.startsWith("Nothing bites")) {
+            stopTimer();
+        } else if (message.startsWith("You lose your")) {
+            stopTimer();
+        } else if (message.startsWith("You land a")) {
+            const match = /'(.*?) ?'/.exec(cleanLogMessage(message));
+            if (match) {
+                const fish = match[1];
+                console.log(fish, '|', document.getElementById('timer').textContent);
+            }
+        } else {
+            console.log("Unknown log", payload);
+        }
+    }
+
+    document.addEventListener("onLogLine", onLogLine);
+</script>
+</head>
+<body>
+    <div id="timer">
+        0.0
+    </div>
+</body>
+</html>
