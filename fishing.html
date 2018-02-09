@@ -35,22 +35,18 @@ html {
 <script>
     var intervalId;
     var startTime;
+    var example;
+
+    function getTimerElement() {
+        'use strict';
+        return document.getElementById('timer');
+    }
 
     function timerUpdate() {
         'use strict';
-        const timerElement = document.getElementById('timer');
+        const timerElement = getTimerElement();
         let time = (Date.now() - startTime) / 1000;
         timerElement.textContent = time.toFixed(1);
-    }
-
-    function cleanLogMessage(message) {
-        'use strict';
-        // Cleans up the ffxiv item-metadata that I don't know how to parse
-        let encodedMessage = encodeURIComponent(message);
-        //console.log(encodedMessage);
-        let cleanedMessage = encodedMessage.replace(/%20/g, " ").replace(/%[^']{3,4}(%)/g, "$1").replace(/%../g, "");
-        //console.log(cleanedMessage);
-        return cleanedMessage;
     }
 
     function stopTimer() {
@@ -58,6 +54,70 @@ html {
             window.clearInterval(intervalId);
             intervalId = null;
         }
+    }
+
+    function parseFishingResult(message) {
+        'use strict';
+        let result = {
+            printableText: '',
+            fishName: '',
+            metaBlocks: [],
+            hq: false
+        };
+        let STATE = 'TEXT';
+        let metaBlock;
+        for (let char of message) {
+            const point = char.charCodeAt(0);
+            //console.debug("----");
+            //console.debug(STATE);
+            //console.debug(point.toString(16));
+            if (STATE === 'TEXT' || STATE === 'FISH_NAME') {
+                if (point == 2) {
+                    STATE = 'META_BLOCK_START';
+                    metaBlock = {
+                        data: ""
+                    };
+                } else if (point == 0xE03C) { // Icon for HQ fish
+                    result.hq = true;
+                    result.printableText += '(HQ)';
+                } else if (point == 0xE0BB) { // Icon for link
+                    // Print nothing
+                } else {
+                    result.printableText += char;
+                    if (STATE === 'FISH_NAME') {
+                        result.fishName += char;
+                    }
+                }
+            } else if (STATE === 'META_BLOCK_START') {
+                STATE = 'META_BLOCK_LENGTH';
+                metaBlock.op = point;
+            } else if (STATE === 'META_BLOCK_LENGTH') {
+                STATE = 'META_BLOCK_DATA';
+                metaBlock.remaining = point;
+            } else if (STATE === 'META_BLOCK_DATA') {
+                if (--metaBlock.remaining > 0) {
+                    metaBlock.data += char;
+                } else {
+                    if (point != 3) {
+                        console.warn("Didn't parse message correctly", message);
+                    }
+                    result.metaBlocks.push(metaBlock);
+                    if (result.metaBlocks.length == 4) {
+                        // Fish name seems to appear after fourth block
+                        STATE = 'FISH_NAME';
+                    } else {
+                        STATE = 'TEXT';
+                    }
+                }
+            }
+        }
+        result.fishName = result.fishName.trim();
+        const size = /measuring (\d+\.\d)/.exec(result.printableText);
+        result.timeToHook = getTimerElement().textContent;
+        if (size) {
+            result.fishSize = size[1];
+        }
+        return result;
     }
 
     function onLogLine(event) {
@@ -76,7 +136,7 @@ html {
         const message = payload[2];
         if (/^You (re)?cast your line/.exec(message)) {
             stopTimer();
-            document.getElementById('timer').textContent = 0.0;
+            getTimerElement().textContent = 0.0;
             intervalId = window.setInterval(timerUpdate, 100);
             startTime = Date.now();
         } else if (message.startsWith("Something bites")) {
@@ -88,17 +148,21 @@ html {
         } else if (message.startsWith("You lose your")) {
             stopTimer();
         } else if (message.startsWith("You land a")) {
-            const match = /'(.*?) ?'/.exec(cleanLogMessage(message));
-            if (match) {
-                const fish = match[1];
-                console.log(fish, '|', document.getElementById('timer').textContent);
+            const fishingResult = parseFishingResult(message);
+            if (fishingResult.fishName) {
+                console.log(fishingResult);
             }
         } else {
-            console.log("Unknown log", payload);
+            //console.log("Unknown log", payload);
         }
     }
 
     document.addEventListener("onLogLine", onLogLine);
+
+    // This event is also sent when "encounters" (combat) start if that's interesting...
+    //document.addEventListener("onOverlayDataUpdate", function(event) {
+    //    console.log(event);
+    //});
 </script>
 </head>
 <body>
