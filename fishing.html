@@ -139,6 +139,10 @@ html {
             getTimerElement().textContent = 0.0;
             intervalId = window.setInterval(timerUpdate, 100);
             startTime = Date.now();
+        } else if (message.startsWith("You reel in your")){
+            stopTimer();
+        } else if (message.startsWith("Your gathering rating")){
+            stopTimer();
         } else if (message.startsWith("Something bites")) {
             stopTimer();
         } else if (message.startsWith("The fish gets away")) {
