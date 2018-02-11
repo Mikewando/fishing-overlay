@@ -36,6 +36,7 @@ html {
     var intervalId;
     var startTime;
     var example;
+    var baitApplied = "";
 
     function getTimerElement() {
         'use strict';
@@ -56,13 +57,28 @@ html {
         }
     }
 
+    function parseBaitMessage(message) {
+        'use strict';
+        // Parses "You apply a ['bait'] to your line"
+        // Can't get this data until bait is applied, default is ""
+        // Cleans up the ffxiv item-metadata that I don't know how to parse
+        let encodedMessage = encodeURIComponent(message);
+        // console.log(encodedMessage);
+        let cleanedMessage = encodedMessage.replace(/%20/g, " ").replace(/%[^']{3,4}(%)/g, "$1").replace(/%../g, "");
+        // console.log(cleanedMessage);
+        const match = /'(.*?) ?'/.exec(cleanedMessage);
+        // console.log(match);
+        return match[1];
+    }
+
     function parseFishingResult(message) {
         'use strict';
         let result = {
             printableText: '',
             fishName: '',
             metaBlocks: [],
-            hq: false
+            hq: false,
+            bait: baitApplied
         };
         let STATE = 'TEXT';
         let metaBlock;
@@ -111,6 +127,7 @@ html {
                 }
             }
         }
+
         result.fishName = result.fishName.trim();
         const size = /measuring (\d+\.\d)/.exec(result.printableText);
         result.timeToHook = getTimerElement().textContent;
@@ -134,14 +151,19 @@ html {
             return;
         }
         const message = payload[2];
+
+        if (message.startsWith("You apply")) {
+            baitApplied = parseBaitMessage(message);
+        }
+
         if (/^You (re)?cast your line/.exec(message)) {
             stopTimer();
             getTimerElement().textContent = 0.0;
             intervalId = window.setInterval(timerUpdate, 100);
             startTime = Date.now();
-        } else if (message.startsWith("You reel in your")){
-            stopTimer();
         } else if (message.startsWith("Something bites")) {
+            stopTimer();
+        } else if (message.startsWith("You reel in your")){
             stopTimer();
         } else if (message.startsWith("The fish gets away")) {
             stopTimer();
@@ -155,7 +177,7 @@ html {
                 console.log(fishingResult);
             }
         } else {
-            //console.log("Unknown log", payload);
+            // console.log("Unknown log", payload);
         }
     }
 
